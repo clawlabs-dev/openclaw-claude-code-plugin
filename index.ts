@@ -1,0 +1,158 @@
+import { registerClaudeLaunchTool } from "./src/tools/claude-launch";
+import { registerClaudeSessionsTool } from "./src/tools/claude-sessions";
+import { registerClaudeKillTool } from "./src/tools/claude-kill";
+import { registerClaudeOutputTool } from "./src/tools/claude-output";
+import { registerClaudeFgTool } from "./src/tools/claude-fg";
+import { registerClaudeBgTool } from "./src/tools/claude-bg";
+import { registerClaudeRespondTool } from "./src/tools/claude-respond";
+import { registerClaudeStatsTool } from "./src/tools/claude-stats";
+import { registerClaudeCommand } from "./src/commands/claude";
+import { registerClaudeSessionsCommand } from "./src/commands/claude-sessions";
+import { registerClaudeKillCommand } from "./src/commands/claude-kill";
+import { registerClaudeFgCommand } from "./src/commands/claude-fg";
+import { registerClaudeBgCommand } from "./src/commands/claude-bg";
+import { registerClaudeResumeCommand } from "./src/commands/claude-resume";
+import { registerClaudeRespondCommand } from "./src/commands/claude-respond";
+import { registerClaudeStatsCommand } from "./src/commands/claude-stats";
+import { registerGatewayMethods } from "./src/gateway";
+import { SessionManager } from "./src/session-manager";
+import { NotificationRouter } from "./src/notifications";
+import { setSessionManager, setNotificationRouter, setPluginConfig, pluginConfig } from "./src/shared";
+import { execFile } from "child_process";
+
+// Plugin register function - called by OpenClaw when loading the plugin
+export function register(api: any) {
+  // Local references for service lifecycle
+  let sm: SessionManager | null = null;
+  let nr: NotificationRouter | null = null;
+  let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Tools
+  registerClaudeLaunchTool(api);
+  registerClaudeSessionsTool(api);
+  registerClaudeKillTool(api);
+  registerClaudeOutputTool(api);
+  registerClaudeFgTool(api);
+  registerClaudeBgTool(api);
+  registerClaudeRespondTool(api);
+  registerClaudeStatsTool(api);
+
+  // Commands
+  registerClaudeCommand(api);
+  registerClaudeSessionsCommand(api);
+  registerClaudeKillCommand(api);
+  registerClaudeFgCommand(api);
+  registerClaudeBgCommand(api);
+  registerClaudeResumeCommand(api);
+  registerClaudeRespondCommand(api);
+  registerClaudeStatsCommand(api);
+
+  // Gateway RPC methods (Task 17)
+  registerGatewayMethods(api);
+
+  // Service
+  api.registerService({
+    id: "openclaw-claude-code-plugin",
+    start: () => {
+      const config = api.getConfig?.() ?? {};
+
+      // Store config globally for all modules (Task 20)
+      setPluginConfig(config);
+
+      // Create SessionManager — uses config for maxSessions and maxPersistedSessions
+      sm = new SessionManager(
+        pluginConfig.maxSessions,
+        pluginConfig.maxPersistedSessions,
+      );
+      setSessionManager(sm);
+
+      // Create NotificationRouter with OpenClaw's outbound message pipeline.
+      // Uses `openclaw message send` CLI since the plugin API does not expose
+      // a runtime.sendMessage method for proactive outbound messages.
+      //
+      // channelId format: "telegram:<chatId>" or just a bare chat ID.
+      // Fallback channel comes from config.fallbackChannel (e.g. "telegram:123456789").
+
+      const sendMessage = (channelId: string, text: string) => {
+        // Resolve channel and target from channelId
+        // Expected formats:
+        //   "telegram:123456789" → channel=telegram, target=123456789
+        //   "discord:987654321" → channel=discord, target=987654321
+        //   "123456789"         → channel=telegram (fallback), target=123456789
+        //   "toolu_xxxx"        → not a real channel, use fallback
+
+        // Parse fallbackChannel from config (e.g. "telegram:123456789")
+        let fallbackChannel = "telegram";
+        let fallbackTarget = "";
+        if (pluginConfig.fallbackChannel?.includes(":")) {
+          const [fc, ft] = pluginConfig.fallbackChannel.split(":", 2);
+          if (fc && ft) { fallbackChannel = fc; fallbackTarget = ft; }
+        }
+
+        let channel = fallbackChannel;
+        let target = fallbackTarget;
+
+        if (channelId === "unknown" || !channelId) {
+          // Tool-launched sessions have originChannel="unknown" — always use fallback
+          if (fallbackTarget) {
+            console.log(`[claude-code] sendMessage: channelId="${channelId}", using fallback ${fallbackChannel}:${fallbackTarget}`);
+          } else {
+            console.warn(`[claude-code] sendMessage: channelId="${channelId}" and no fallbackChannel configured — message will not be sent`);
+            return;
+          }
+        } else if (channelId.includes(":")) {
+          const [ch, tgt] = channelId.split(":", 2);
+          if (ch && tgt) {
+            channel = ch;
+            target = tgt;
+          }
+        } else if (/^-?\d+$/.test(channelId)) {
+          // Bare numeric ID — assume Telegram chat ID
+          channel = "telegram";
+          target = channelId;
+        } else if (fallbackTarget) {
+          // Non-numeric, non-structured ID (e.g. "toolu_xxx", "command")
+          // Use fallback from config
+          console.log(`[claude-code] sendMessage: unrecognized channelId="${channelId}", using fallback ${fallbackChannel}:${fallbackTarget}`);
+        } else {
+          console.warn(`[claude-code] sendMessage: unrecognized channelId="${channelId}" and no fallbackChannel configured — message will not be sent`);
+          return;
+        }
+
+        console.log(`[claude-code] sendMessage -> channel=${channel}, target=${target}, textLen=${text.length}`);
+
+        execFile("openclaw", ["message", "send", "--channel", channel, "--target", target, "-m", text], { timeout: 15_000 }, (err, stdout, stderr) => {
+          if (err) {
+            console.error(`[claude-code] sendMessage CLI ERROR: ${err.message}`);
+            if (stderr) console.error(`[claude-code] sendMessage CLI STDERR: ${stderr}`);
+          } else {
+            console.log(`[claude-code] sendMessage CLI OK -> channel=${channel}, target=${target}`);
+            if (stdout.trim()) console.log(`[claude-code] sendMessage CLI STDOUT: ${stdout.trim()}`);
+          }
+        });
+      };
+
+      nr = new NotificationRouter(sendMessage);
+      setNotificationRouter(nr);
+
+      // Wire NotificationRouter into SessionManager
+      sm.notificationRouter = nr;
+
+      // Start the long-running session reminder check
+      nr.startReminderCheck(() => sm?.list("running") ?? []);
+
+      // GC interval
+      cleanupInterval = setInterval(() => sm!.cleanup(), 5 * 60 * 1000);
+    },
+    stop: () => {
+      if (nr) nr.stop();
+      if (sm) sm.killAll();
+      if (cleanupInterval) clearInterval(cleanupInterval);
+      cleanupInterval = null;
+      sm = null;
+      nr = null;
+      setSessionManager(null);
+      setNotificationRouter(null);
+    },
+  });
+}

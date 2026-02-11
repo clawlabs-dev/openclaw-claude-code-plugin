@@ -1,0 +1,56 @@
+{
+  "name": "@betrue/openclaw-claude-code-plugin",
+  "version": "1.0.4",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild index.ts --bundle --platform=node --target=node18 --format=cjs --outfile=dist/index.js --minify --external:openclaw --external:openclaw/plugin-sdk --external:@anthropic-ai/claude-agent-sdk"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "files": [
+    "dist/",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.37"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3",
+    "@sinclair/typebox": "^0.34.48",
+    "nanoid": "^3.3.7"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "claude",
+    "claude-code",
+    "coding-agent",
+    "ai",
+    "anthropic",
+    "agent",
+    "code-generation",
+    "automation",
+    "cli",
+    "background-process",
+    "developer-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alizarion/openclaw-claude-code-plugin.git"
+  },
+  "homepage": "https://github.com/alizarion/openclaw-claude-code-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/alizarion/openclaw-claude-code-plugin/issues"
+  },
+  "license": "MIT",
+  "author": "Betrue <hello@betrue.fr>",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "An OpenClaw plugin that orchestrates Claude Code sessions as managed background processes. Launch, monitor, and control Claude coding agents directly from your AI gateway."
+}

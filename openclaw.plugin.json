@@ -1,0 +1,53 @@
+{
+  "id": "openclaw-claude-code-plugin",
+  "name": "OpenClaw Claude Code Plugin",
+  "description": "Orchestrate Claude Code sessions from OpenClaw",
+  "version": "1.0.3",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "maxSessions": {
+        "type": "number",
+        "default": 5
+      },
+      "defaultBudgetUsd": {
+        "type": "number",
+        "default": 5
+      },
+      "defaultModel": {
+        "type": "string",
+        "description": "Default model for new sessions (e.g. 'sonnet', 'opus')"
+      },
+      "defaultWorkdir": {
+        "type": "string",
+        "description": "Default working directory for new sessions"
+      },
+      "idleTimeoutMinutes": {
+        "type": "number",
+        "default": 30,
+        "description": "Idle timeout in minutes for multi-turn sessions before auto-kill"
+      },
+      "maxPersistedSessions": {
+        "type": "number",
+        "default": 50,
+        "description": "Maximum number of completed sessions to keep in memory for resume"
+      },
+      "fallbackChannel": {
+        "type": "string",
+        "description": "Fallback notification channel (e.g. 'telegram:123456789')"
+      },
+      "permissionMode": {
+        "type": "string",
+        "default": "bypassPermissions",
+        "enum": [
+          "default",
+          "plan",
+          "acceptEdits",
+          "bypassPermissions"
+        ],
+        "description": "Default permission mode for Claude Code sessions"
+      }
+    }
+  }
+}
