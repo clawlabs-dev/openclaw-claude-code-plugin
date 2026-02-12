@@ -88,9 +88,9 @@ export function resolveAgentChannel(workdir: string): string | undefined {
   const normalise = (p: string) => p.replace(/\/+$/, "");
   const normWorkdir = normalise(workdir);
 
-  // Exact match (after trailing-slash normalisation)
+  // Prefix match: workdir is under (or equal to) the configured dir
   for (const [dir, channel] of Object.entries(mapping)) {
-    if (normalise(dir) === normWorkdir) {
+    if (normWorkdir === normalise(dir) || normWorkdir.startsWith(normalise(dir) + "/")) {
       return channel;
     }
   }
