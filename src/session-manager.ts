@@ -279,24 +279,46 @@ export class SessionManager {
       `Use claude_output(session='${session.id}', full=true) to get the full result and transmit the analysis to the user.`,
     ].join("\n");
 
-    console.log(`[SessionManager] Triggering agent event for session=${session.id}`);
+    console.log(`[SessionManager] Triggering agent event for session=${session.id}, originChannel=${session.originChannel}`);
 
-    execFile(
-      "openclaw",
-      ["system", "event", "--text", eventText, "--mode", "now"],
-      (err, _stdout, stderr) => {
-        if (err) {
-          console.error(
-            `[SessionManager] Failed to trigger agent event for session=${session.id}: ${err.message}`,
-          );
-          if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
-        } else {
-          console.log(
-            `[SessionManager] Agent event triggered for session=${session.id}`,
-          );
-        }
-      },
-    );
+    if (session.originChannel && session.originChannel !== "unknown") {
+      // Route to the specific agent's channel
+      const [channel, target] = session.originChannel.split(":", 2);
+      execFile(
+        "openclaw",
+        ["message", "send", "--channel", channel, "--target", target, "-m", eventText],
+        (err, _stdout, stderr) => {
+          if (err) {
+            console.error(
+              `[SessionManager] Failed to send agent event via channel for session=${session.id}: ${err.message}`,
+            );
+            if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+          } else {
+            console.log(
+              `[SessionManager] Agent event sent via channel=${channel} target=${target} for session=${session.id}`,
+            );
+          }
+        },
+      );
+    } else {
+      // Fallback: wake main agent
+      execFile(
+        "openclaw",
+        ["system", "event", "--text", eventText, "--mode", "now"],
+        (err, _stdout, stderr) => {
+          if (err) {
+            console.error(
+              `[SessionManager] Failed to trigger agent event for session=${session.id}: ${err.message}`,
+            );
+            if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+          } else {
+            console.log(
+              `[SessionManager] Agent event triggered for session=${session.id}`,
+            );
+          }
+        },
+      );
+    }
   }
 
   /**
@@ -325,28 +347,46 @@ export class SessionManager {
       `Use claude_respond(session='${session.id}', message='...') to send a reply, or claude_output(session='${session.id}') to see full context.`,
     ].join("\n");
 
-    console.log(`[SessionManager] Triggering waiting-for-input event for session=${session.id} (multiTurn=${session.multiTurn})`);
+    console.log(`[SessionManager] Triggering waiting-for-input event for session=${session.id} (multiTurn=${session.multiTurn}), originChannel=${session.originChannel}`);
 
-    // Fire system event to wake the orchestrator agent
-    execFile(
-      "openclaw",
-      ["system", "event", "--text", eventText, "--mode", "now"],
-      (err, _stdout, stderr) => {
-        if (err) {
-          console.error(
-            `[SessionManager] Failed to trigger waiting-for-input event for session=${session.id}: ${err.message}`,
-          );
-          if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
-        } else {
-          console.log(
-            `[SessionManager] Waiting-for-input event triggered for session=${session.id}`,
-          );
-        }
-      },
-    );
-
-    // Note: `openclaw system event --mode now` above already triggers an
-    // immediate gateway wake, so no separate wake call is needed.
+    if (session.originChannel && session.originChannel !== "unknown") {
+      // Route to the specific agent's channel
+      const [channel, target] = session.originChannel.split(":", 2);
+      execFile(
+        "openclaw",
+        ["message", "send", "--channel", channel, "--target", target, "-m", eventText],
+        (err, _stdout, stderr) => {
+          if (err) {
+            console.error(
+              `[SessionManager] Failed to send waiting-for-input event via channel for session=${session.id}: ${err.message}`,
+            );
+            if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+          } else {
+            console.log(
+              `[SessionManager] Waiting-for-input event sent via channel=${channel} target=${target} for session=${session.id}`,
+            );
+          }
+        },
+      );
+    } else {
+      // Fallback: wake main agent
+      execFile(
+        "openclaw",
+        ["system", "event", "--text", eventText, "--mode", "now"],
+        (err, _stdout, stderr) => {
+          if (err) {
+            console.error(
+              `[SessionManager] Failed to trigger waiting-for-input event for session=${session.id}: ${err.message}`,
+            );
+            if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+          } else {
+            console.log(
+              `[SessionManager] Waiting-for-input event triggered for session=${session.id}`,
+            );
+          }
+        },
+      );
+    }
   }
 
   /**
