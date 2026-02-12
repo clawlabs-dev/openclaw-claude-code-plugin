@@ -107,9 +107,9 @@ Configuration is defined in `openclaw.plugin.json` and passed to the plugin via 
 ### Agent Tools
 
 ```
-claude_launch(prompt: "Fix auth bug", workdir: "/app", name: "fix-auth", channel: "telegram:123")
+claude_launch(prompt: "Fix auth bug", workdir: "/app", name: "fix-auth")
 claude_sessions(status: "running")
-claude_fg(session: "fix-auth", channel: "telegram:123")
+claude_fg(session: "fix-auth")
 claude_respond(session: "fix-auth", message: "Also add tests")
 ```
 
@@ -159,7 +159,7 @@ When a Claude Code session asks a question (wake event), analyze it and decide:
 
 ## Workflow
 
-1. User sends a coding task -> `claude_launch(prompt, multi_turn: true, channel: "<origin>")`
+1. User sends a coding task -> `claude_launch(prompt, multi_turn: true)`
 2. Session runs in background. Monitor via wake events.
 3. On wake event -> `claude_output` to read the question, then auto-respond or forward.
 4. On user reply to a forwarded question -> `claude_respond` with their answer.
