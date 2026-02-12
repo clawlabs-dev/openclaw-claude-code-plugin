@@ -62,7 +62,7 @@ Ensure `openclaw` CLI is available in your PATH — the plugin shells out to `op
 
 ## Configuration
 
-Configuration is defined in `openclaw.plugin.json` and passed to the plugin via `api.getConfig()`.
+Configuration is defined in `openclaw.plugin.json` and passed to the plugin via `api.pluginConfig`.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
@@ -73,6 +73,7 @@ Configuration is defined in `openclaw.plugin.json` and passed to the plugin via 
 | `idleTimeoutMinutes` | `number` | `30` | Idle timeout for multi-turn sessions. |
 | `maxPersistedSessions` | `number` | `50` | Max completed sessions kept for resume. |
 | `fallbackChannel` | `string` | — | Fallback notification channel (e.g. `"telegram:123456789"`). |
+| `agentChannels` | `Record<string, string>` | — | Map workdir paths to notification channels. See [Agent Channels](AGENT_CHANNELS.md). |
 | `permissionMode` | `string` | `"bypassPermissions"` | Default permission mode: `"default"`, `"plan"`, `"acceptEdits"`, `"bypassPermissions"`. |
 
 ```json
@@ -81,7 +82,10 @@ Configuration is defined in `openclaw.plugin.json` and passed to the plugin via 
   "defaultBudgetUsd": 10,
   "defaultModel": "sonnet",
   "defaultWorkdir": "/home/user/projects",
-  "permissionMode": "bypassPermissions"
+  "permissionMode": "bypassPermissions",
+  "agentChannels": {
+    "/home/user/agent-seo": "telegram:seo-bot:123456789"
+  }
 }
 ```
 
