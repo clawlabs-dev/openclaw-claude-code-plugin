@@ -73,7 +73,7 @@ Configuration is defined in `openclaw.plugin.json` and passed to the plugin via 
 | `idleTimeoutMinutes` | `number` | `30` | Idle timeout for multi-turn sessions. |
 | `maxPersistedSessions` | `number` | `50` | Max completed sessions kept for resume. |
 | `fallbackChannel` | `string` | — | Fallback notification channel (e.g. `"telegram:123456789"`). |
-| `agentChannels` | `Record<string, string>` | — | Map workdir paths to notification channels. See [Agent Channels](AGENT_CHANNELS.md). |
+| `agentChannels` | `Record<string, string>` | — | Map workdir paths to notification channels. See [Agent Channels](docs/AGENT_CHANNELS.md). |
 | `permissionMode` | `string` | `"bypassPermissions"` | Default permission mode: `"default"`, `"plan"`, `"acceptEdits"`, `"bypassPermissions"`. |
 
 ```json
@@ -178,6 +178,8 @@ A comprehensive orchestration skill is available at [`skills/claude-code-orchest
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture diagram and component breakdown |
 | [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md) | Notification matrix, delivery details, and agent wake events |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Project structure, dependencies, design decisions, and contribution guide |
+| [docs/AGENT_CHANNELS.md](docs/AGENT_CHANNELS.md) | Agent-specific notification routing via workspace directory mapping |
+| [docs/AGENT_CHANNELS.md](docs/AGENT_CHANNELS.md) | Agent-specific notification routing via workspace directory mapping |
 
 ---
 
