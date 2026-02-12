@@ -9,15 +9,15 @@ In `openclaw.json` → `plugins.entries["openclaw-claude-code-plugin"].config`:
 ```json
 {
   "agentChannels": {
-    "/home/user/agent-a": "telegram:agent-a-account:123456789",
-    "/home/user/agent-b": "telegram:987654321"
+    "/home/user/agent-seo": "telegram:seo-bot:123456789",
+    "/home/user/agent-main": "telegram:main-bot:123456789"
   }
 }
 ```
 
 ## Channel format
-- `channel:target` → e.g. `telegram:123456789`
-- `channel:account:target` → e.g. `telegram:my-agent:123456789` (uses `--account` flag)
+- **3 segments** `channel:account:target` — sends via a specific bot account (e.g. `telegram:seo-bot:123456789`)
+- **2 segments** `channel:target` — sends via the default bot (e.g. `telegram:123456789`)
 
 ## How it works
 1. Agent calls `claude_launch(prompt=..., name=...)` — **no `channel` param needed**
@@ -32,5 +32,5 @@ explicit channel param > ctxChannel (from factory) > agentChannels[workdir] > fa
 
 ## Important
 - Agents should **NOT** pass `channel` in `claude_launch` — it bypasses automatic routing
-- Prefix matching: `/home/user/agent-a/subdir` matches `/home/user/agent-a`
+- Prefix matching: `/home/user/agent-seo/subdir` matches `/home/user/agent-seo`
 - Entries sorted by path length (most specific wins)
