@@ -283,10 +283,19 @@ export class SessionManager {
 
     if (session.originChannel && session.originChannel !== "unknown") {
       // Route to the specific agent's channel
-      const [channel, target] = session.originChannel.split(":", 2);
+      // Supports both "channel:target" and "channel:account:target" formats
+      const parts = session.originChannel.split(":");
+      let args: string[];
+      if (parts.length >= 3) {
+        // channel:account:target format
+        args = ["message", "send", "--channel", parts[0], "--account", parts[1], "--target", parts.slice(2).join(":"), "-m", eventText];
+      } else {
+        // channel:target format (2 segments)
+        args = ["message", "send", "--channel", parts[0], "--target", parts[1], "-m", eventText];
+      }
       execFile(
         "openclaw",
-        ["message", "send", "--channel", channel, "--target", target, "-m", eventText],
+        args,
         (err, _stdout, stderr) => {
           if (err) {
             console.error(
@@ -295,7 +304,7 @@ export class SessionManager {
             if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
           } else {
             console.log(
-              `[SessionManager] Agent event sent via channel=${channel} target=${target} for session=${session.id}`,
+              `[SessionManager] Agent event sent via channel=${parts[0]} target=${parts.length >= 3 ? parts.slice(2).join(":") : parts[1]} for session=${session.id}`,
             );
           }
         },
@@ -351,10 +360,19 @@ export class SessionManager {
 
     if (session.originChannel && session.originChannel !== "unknown") {
       // Route to the specific agent's channel
-      const [channel, target] = session.originChannel.split(":", 2);
+      // Supports both "channel:target" and "channel:account:target" formats
+      const parts = session.originChannel.split(":");
+      let args: string[];
+      if (parts.length >= 3) {
+        // channel:account:target format
+        args = ["message", "send", "--channel", parts[0], "--account", parts[1], "--target", parts.slice(2).join(":"), "-m", eventText];
+      } else {
+        // channel:target format (2 segments)
+        args = ["message", "send", "--channel", parts[0], "--target", parts[1], "-m", eventText];
+      }
       execFile(
         "openclaw",
-        ["message", "send", "--channel", channel, "--target", target, "-m", eventText],
+        args,
         (err, _stdout, stderr) => {
           if (err) {
             console.error(
@@ -363,7 +381,7 @@ export class SessionManager {
             if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
           } else {
             console.log(
-              `[SessionManager] Waiting-for-input event sent via channel=${channel} target=${target} for session=${session.id}`,
+              `[SessionManager] Waiting-for-input event sent via channel=${parts[0]} target=${parts.length >= 3 ? parts.slice(2).join(":") : parts[1]} for session=${session.id}`,
             );
           }
         },
