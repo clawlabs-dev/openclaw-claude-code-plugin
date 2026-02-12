@@ -392,7 +392,26 @@ export class SessionManager {
       `Use claude_respond(session='${session.id}', message='...') to send a reply, or claude_output(session='${session.id}') to see full context.`,
     ].join("\n");
 
-    this.routeEventMessage(session, eventText, "waiting-for-input event");
+    // Always use system event to wake the orchestrator agent.
+    // The notification router (nr.onWaitingForInput) already handles sending
+    // the user-facing message to the appropriate channel (e.g. Telegram).
+    console.log(`[SessionManager] Triggering waiting-for-input event via system event for session=${session.id}`);
+    execFile(
+      "openclaw",
+      ["system", "event", "--text", eventText, "--mode", "now"],
+      (err, _stdout, stderr) => {
+        if (err) {
+          console.error(
+            `[SessionManager] Failed to trigger waiting-for-input event for session=${session.id}: ${err.message}`,
+          );
+          if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+        } else {
+          console.log(
+            `[SessionManager] waiting-for-input event triggered via system event for session=${session.id}`,
+          );
+        }
+      },
+    );
   }
 
   /**
