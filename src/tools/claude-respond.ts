@@ -3,14 +3,21 @@ import { sessionManager, notificationRouter, resolveOriginChannel, resolveAgentC
 import type { OpenClawPluginToolContext } from "../types";
 
 export function makeClaudeRespondTool(ctx?: OpenClawPluginToolContext) {
-  // Build channel from factory context if available
+  // Build channel from factory context if available.
+  // Priority: 1) ctx.messageChannel with injected accountId
+  //           2) resolveAgentChannel(ctx.workspaceDir) from agentChannels config
+  //           3) ctx.messageChannel as-is (if it already has |)
   let fallbackChannel: string | undefined;
   if (ctx?.messageChannel && ctx?.agentAccountId) {
     const parts = ctx.messageChannel.split("|");
     if (parts.length >= 2) {
       fallbackChannel = `${parts[0]}|${ctx.agentAccountId}|${parts.slice(1).join("|")}`;
     }
-  } else if (ctx?.messageChannel && ctx.messageChannel.includes("|")) {
+  }
+  if (!fallbackChannel && ctx?.workspaceDir) {
+    fallbackChannel = resolveAgentChannel(ctx.workspaceDir);
+  }
+  if (!fallbackChannel && ctx?.messageChannel && ctx.messageChannel.includes("|")) {
     fallbackChannel = ctx.messageChannel;
   }
 
@@ -29,12 +36,6 @@ export function makeClaudeRespondTool(ctx?: OpenClawPluginToolContext) {
         Type.Boolean({
           description:
             "If true, interrupt the current turn before sending the message. Useful to redirect the session mid-response.",
-        }),
-      ),
-      channel: Type.Optional(
-        Type.String({
-          description:
-            'Origin channel in "channel|target" format (e.g. "telegram|123456789"). Pass this when calling from an agent tool context.',
         }),
       ),
     }),
@@ -86,7 +87,7 @@ export function makeClaudeRespondTool(ctx?: OpenClawPluginToolContext) {
         // Resolve origin channel with fallback chain
         let originChannel = resolveOriginChannel(
           { id: _id },
-          params.channel || fallbackChannel || resolveAgentChannel(session.workdir),
+          fallbackChannel || resolveAgentChannel(session.workdir),
         );
         if (originChannel === "unknown") {
           const agentChannel = resolveAgentChannel(session.workdir);

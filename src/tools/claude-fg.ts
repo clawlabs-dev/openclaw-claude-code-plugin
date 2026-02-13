@@ -3,16 +3,24 @@ import { sessionManager, formatDuration, resolveOriginChannel, resolveAgentChann
 import type { OpenClawPluginToolContext } from "../types";
 
 export function makeClaudeFgTool(ctx?: OpenClawPluginToolContext) {
-  // Build channel from factory context if available
+  // Build channel from factory context if available.
+  // Priority: 1) ctx.messageChannel with injected accountId
+  //           2) resolveAgentChannel(ctx.workspaceDir) from agentChannels config
+  //           3) ctx.messageChannel as-is (if it already has |)
   let fallbackChannel: string | undefined;
   if (ctx?.messageChannel && ctx?.agentAccountId) {
     const parts = ctx.messageChannel.split("|");
     if (parts.length >= 2) {
       fallbackChannel = `${parts[0]}|${ctx.agentAccountId}|${parts.slice(1).join("|")}`;
     }
-  } else if (ctx?.messageChannel && ctx.messageChannel.includes("|")) {
+  }
+  if (!fallbackChannel && ctx?.workspaceDir) {
+    fallbackChannel = resolveAgentChannel(ctx.workspaceDir);
+  }
+  if (!fallbackChannel && ctx?.messageChannel && ctx.messageChannel.includes("|")) {
     fallbackChannel = ctx.messageChannel;
   }
+  console.log(`[claude-fg] Factory context: messageChannel=${ctx?.messageChannel}, agentAccountId=${ctx?.agentAccountId}, workspaceDir=${ctx?.workspaceDir}, fallbackChannel=${fallbackChannel}`);
 
   return {
     name: "claude_fg",
@@ -25,12 +33,6 @@ export function makeClaudeFgTool(ctx?: OpenClawPluginToolContext) {
       lines: Type.Optional(
         Type.Number({
           description: "Number of recent buffered lines to show (default 30)",
-        }),
-      ),
-      channel: Type.Optional(
-        Type.String({
-          description:
-            'Origin channel in "channel|target" format (e.g. "telegram|123456789"). Pass this when calling from an agent tool context.',
         }),
       ),
     }),
@@ -60,8 +62,8 @@ export function makeClaudeFgTool(ctx?: OpenClawPluginToolContext) {
       }
 
       // Mark this conversation as a foreground channel
-      // _id is tool call ID; use explicit params.channel when available
-      let channelId = resolveOriginChannel({ id: _id }, params.channel || fallbackChannel);
+      let channelId = resolveOriginChannel({ id: _id }, fallbackChannel);
+      console.log(`[claude-fg] channelId resolved: ${channelId}, session.workdir=${session.workdir}`);
 
       // If resolveOriginChannel couldn't determine a real channel (returned "unknown"),
       // try resolving via the session's workdir → agentChannels mapping as a fallback.

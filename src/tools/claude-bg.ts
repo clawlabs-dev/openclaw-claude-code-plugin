@@ -3,16 +3,24 @@ import { sessionManager, resolveOriginChannel, resolveAgentChannel } from "../sh
 import type { OpenClawPluginToolContext } from "../types";
 
 export function makeClaudeBgTool(ctx?: OpenClawPluginToolContext) {
-  // Build channel from factory context if available
+  // Build channel from factory context if available.
+  // Priority: 1) ctx.messageChannel with injected accountId
+  //           2) resolveAgentChannel(ctx.workspaceDir) from agentChannels config
+  //           3) ctx.messageChannel as-is (if it already has |)
   let fallbackChannel: string | undefined;
   if (ctx?.messageChannel && ctx?.agentAccountId) {
     const parts = ctx.messageChannel.split("|");
     if (parts.length >= 2) {
       fallbackChannel = `${parts[0]}|${ctx.agentAccountId}|${parts.slice(1).join("|")}`;
     }
-  } else if (ctx?.messageChannel && ctx.messageChannel.includes("|")) {
+  }
+  if (!fallbackChannel && ctx?.workspaceDir) {
+    fallbackChannel = resolveAgentChannel(ctx.workspaceDir);
+  }
+  if (!fallbackChannel && ctx?.messageChannel && ctx.messageChannel.includes("|")) {
     fallbackChannel = ctx.messageChannel;
   }
+  console.log(`[claude-bg] Factory context: messageChannel=${ctx?.messageChannel}, agentAccountId=${ctx?.agentAccountId}, workspaceDir=${ctx?.workspaceDir}, fallbackChannel=${fallbackChannel}`);
 
   return {
     name: "claude_bg",
@@ -23,12 +31,6 @@ export function makeClaudeBgTool(ctx?: OpenClawPluginToolContext) {
         Type.String({
           description:
             "Session name or ID to send to background. If omitted, detaches the current foreground session.",
-        }),
-      ),
-      channel: Type.Optional(
-        Type.String({
-          description:
-            'Origin channel in "channel|target" format (e.g. "telegram|123456789"). Pass this when calling from an agent tool context.',
         }),
       ),
     }),
@@ -58,7 +60,8 @@ export function makeClaudeBgTool(ctx?: OpenClawPluginToolContext) {
           };
         }
 
-        let channelId = resolveOriginChannel({ id: _id }, params.channel || fallbackChannel);
+        let channelId = resolveOriginChannel({ id: _id }, fallbackChannel);
+        console.log(`[claude-bg] channelId resolved: ${channelId}, session.workdir=${session.workdir}`);
         if (channelId === "unknown") {
           const agentChannel = resolveAgentChannel(session.workdir);
           if (agentChannel) {
@@ -78,7 +81,8 @@ export function makeClaudeBgTool(ctx?: OpenClawPluginToolContext) {
       }
 
       // No session specified — find any session that has this channel in foreground
-      let resolvedId = resolveOriginChannel({ id: _id }, params.channel || fallbackChannel);
+      let resolvedId = resolveOriginChannel({ id: _id }, fallbackChannel);
+      console.log(`[claude-bg] resolvedId (no session): ${resolvedId}`);
       if (resolvedId === "unknown") {
         // Try each session's workdir to find a matching agent channel
         const allSessionsForLookup = sessionManager.list("all");

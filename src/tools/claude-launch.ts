@@ -70,12 +70,6 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
           },
         ),
       ),
-      channel: Type.Optional(
-        Type.String({
-          description:
-            'Origin channel for notifications, in "channel|target" format (e.g. "telegram|123456789"). Pass this when calling from an agent tool context so notifications reach the right channel.',
-        }),
-      ),
     }),
     async execute(_id: string, params: any) {
       if (!sessionManager) {
@@ -110,25 +104,33 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
           resolvedResumeId = resolved;
         }
 
-        // Build channel from ctx if available
+        // Build channel from ctx if available.
+        // Priority: 1) ctx.messageChannel with injected accountId (if multi-segment)
+        //           2) resolveAgentChannel(ctx.workspaceDir) from agentChannels config
+        //           3) resolveAgentChannel(workdir) as secondary workspace lookup
+        //           4) ctx.messageChannel as-is (if it already has |)
         let ctxChannel: string | undefined;
         if (ctx.messageChannel && ctx.agentAccountId) {
-          // messageChannel might be "telegram|123456789" — inject account
           const parts = ctx.messageChannel.split("|");
           if (parts.length >= 2) {
             ctxChannel = `${parts[0]}|${ctx.agentAccountId}|${parts.slice(1).join("|")}`;
           }
-        } else if (ctx.messageChannel && ctx.messageChannel.includes("|")) {
+        }
+        // If messageChannel was bare (e.g. "telegram"), fall back to workspace-based lookup
+        if (!ctxChannel && ctx.workspaceDir) {
+          ctxChannel = resolveAgentChannel(ctx.workspaceDir);
+        }
+        if (!ctxChannel && ctx.messageChannel && ctx.messageChannel.includes("|")) {
           ctxChannel = ctx.messageChannel;
         }
 
         // Resolve origin channel with fallback chain:
-        // 1. explicit params.channel > ctx-based channel > agentChannels lookup
-        // 2. resolveOriginChannel from tool context
-        // 3. If still "unknown", fall back to resolveAgentChannel(workdir)
+        // 1. ctx-based channel (from above)
+        // 2. resolveAgentChannel(workdir) — workdir may differ from ctx.workspaceDir
+        // 3. resolveOriginChannel falls back to pluginConfig.fallbackChannel
         let originChannel = resolveOriginChannel(
           { id: _id },
-          params.channel || ctxChannel || resolveAgentChannel(workdir),
+          ctxChannel || resolveAgentChannel(workdir),
         );
         if (originChannel === "unknown") {
           const agentChannel = resolveAgentChannel(workdir);

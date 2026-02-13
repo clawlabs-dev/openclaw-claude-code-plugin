@@ -29,14 +29,25 @@ export function register(api: any) {
 
   // Tools — registered as factory functions so each invocation receives
   // the calling agent's context (agentId, workspaceDir, messageChannel, etc.)
-  api.registerTool((ctx: any) => makeClaudeLaunchTool(ctx), { optional: false });
-  api.registerTool((ctx: any) => makeClaudeSessionsTool(ctx), { optional: false });
-  api.registerTool((ctx: any) => makeClaudeKillTool(ctx), { optional: false });
-  api.registerTool((ctx: any) => makeClaudeOutputTool(ctx), { optional: false });
-  api.registerTool((ctx: any) => makeClaudeFgTool(ctx), { optional: false });
-  api.registerTool((ctx: any) => makeClaudeBgTool(ctx), { optional: false });
-  api.registerTool((ctx: any) => makeClaudeRespondTool(ctx), { optional: false });
-  api.registerTool((ctx: any) => makeClaudeStatsTool(ctx), { optional: false });
+  const logCtx = (toolName: string, ctx: any) => {
+    console.log(`[PLUGIN] registerTool factory called for ${toolName}`);
+    console.log(`[PLUGIN]   ctx keys: ${ctx ? Object.keys(ctx).join(", ") : "null/undefined"}`);
+    console.log(`[PLUGIN]   ctx.agentAccountId=${ctx?.agentAccountId}`);
+    console.log(`[PLUGIN]   ctx.messageChannel=${ctx?.messageChannel}`);
+    console.log(`[PLUGIN]   ctx.agentId=${ctx?.agentId}`);
+    console.log(`[PLUGIN]   ctx.sessionKey=${ctx?.sessionKey}`);
+    console.log(`[PLUGIN]   ctx.workspaceDir=${ctx?.workspaceDir}`);
+    console.log(`[PLUGIN]   ctx.sandboxed=${ctx?.sandboxed}`);
+    console.log(`[PLUGIN]   full ctx: ${JSON.stringify(ctx, null, 2)}`);
+  };
+  api.registerTool((ctx: any) => { logCtx("claude_launch", ctx); return makeClaudeLaunchTool(ctx); }, { optional: false });
+  api.registerTool((ctx: any) => { logCtx("claude_sessions", ctx); return makeClaudeSessionsTool(ctx); }, { optional: false });
+  api.registerTool((ctx: any) => { logCtx("claude_kill", ctx); return makeClaudeKillTool(ctx); }, { optional: false });
+  api.registerTool((ctx: any) => { logCtx("claude_output", ctx); return makeClaudeOutputTool(ctx); }, { optional: false });
+  api.registerTool((ctx: any) => { logCtx("claude_fg", ctx); return makeClaudeFgTool(ctx); }, { optional: false });
+  api.registerTool((ctx: any) => { logCtx("claude_bg", ctx); return makeClaudeBgTool(ctx); }, { optional: false });
+  api.registerTool((ctx: any) => { logCtx("claude_respond", ctx); return makeClaudeRespondTool(ctx); }, { optional: false });
+  api.registerTool((ctx: any) => { logCtx("claude_stats", ctx); return makeClaudeStatsTool(ctx); }, { optional: false });
 
   // Commands
   registerClaudeCommand(api);
