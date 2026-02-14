@@ -1,7 +1,6 @@
 import { execFile } from "child_process";
-import { request as httpRequest } from "http";
 import { Session } from "./session";
-import { generateSessionName } from "./shared";
+import { generateSessionName, resolveAgentId, extractAgentId } from "./shared";
 import type { NotificationRouter } from "./notifications";
 import type { SessionConfig, SessionStatus } from "./types";
 
@@ -310,34 +309,50 @@ export class SessionManager {
       }
     }
 
-    // Fallback: POST to Gateway's internal webhook to wake the orchestrator immediately.
-    const gatewayUrl = "http://127.0.0.1:18789/hooks/wake";
-    const payload = JSON.stringify({ text: eventText, mode: "now" });
-    const req = httpRequest(gatewayUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(payload),
-      },
-    }, (res) => {
-      if (res.statusCode === 200) {
-        console.log(`[SessionManager] ${label} triggered via webhook for session=${session.id}`);
-      } else {
-        console.error(`[SessionManager] Webhook returned ${res.statusCode} for session=${session.id}`);
-      }
-    });
-    req.on("error", (err) => {
-      console.error(`[SessionManager] Failed to trigger ${label} via webhook: ${err.message}`);
-    });
-    req.write(payload);
-    req.end();
+    // Fallback: resolve agentId from originChannel or workdir, then use
+    // `openclaw agent` for agent-aware routing, or `system event` as last resort.
+    const agentId =
+      (session.originChannel ? extractAgentId(session.originChannel) : undefined) ??
+      resolveAgentId(session.workdir);
+
+    if (agentId) {
+      console.log(`[SessionManager] ${label} fallback: using agent command for agentId=${agentId}`);
+      execFile(
+        "openclaw",
+        ["agent", "--agent", agentId, "--deliver", "-m", eventText],
+        (err, _stdout, stderr) => {
+          if (err) {
+            console.error(
+              `[SessionManager] Failed to trigger ${label} via agent for session=${session.id}: ${err.message}`,
+            );
+            if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+          } else {
+            console.log(
+              `[SessionManager] ${label} triggered via agent=${agentId} for session=${session.id}`,
+            );
+          }
+        },
+      );
+    } else {
+      execFile(
+        "openclaw",
+        ["system", "event", "--text", eventText, "--mode", "now"],
+        (err, _stdout, stderr) => {
+          if (err) {
+            console.error(
+              `[SessionManager] Failed to trigger ${label} for session=${session.id}: ${err.message}`,
+            );
+            if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+          } else {
+            console.log(
+              `[SessionManager] ${label} triggered via system event for session=${session.id}`,
+            );
+          }
+        },
+      );
+    }
   }
 
-  /**
-   * Trigger an OpenClaw agent event when a Claude Code session completes.
-   * Fires `openclaw system event` with session details so the agent can
-   * immediately process the result.
-   */
   /**
    * Trigger an OpenClaw agent event when a Claude Code session completes.
    * Fires `openclaw system event` with session details so the agent can
@@ -365,23 +380,13 @@ export class SessionManager {
     ].join("\n");
 
     this.routeEventMessage(session, eventText, "agent event");
-
-    // Also trigger heartbeat immediately so the agent processes the completion
-    execFile("openclaw", ["system", "event", "--text", "Session completed", "--mode", "now"], (err) => {
-      if (err) {
-        console.error(`[SessionManager] Failed to trigger heartbeat for completed session=${session.id}: ${err.message}`);
-      } else {
-        console.log(`[SessionManager] completion event triggered via system event for session=${session.id}`);
-      }
-    });
   }
 
-
   /**
-   * Trigger an OpenClaw event when a session is waiting for user input.
+   * Trigger an OpenClaw agent event when a session is waiting for user input.
    * Works for ALL session types (single-turn and multi-turn).
-   * Routes via the origin channel (Telegram, etc.) so the notification
-   * wakes the agent through normal channel routing.
+   * Fires `openclaw system event --mode now` so the orchestrator agent
+   * wakes up immediately and can forward the question to the user.
    */
   private triggerWaitingForInputEvent(session: Session): void {
     // Debounce: skip if a waiting-for-input event was sent recently for this session
@@ -412,14 +417,53 @@ export class SessionManager {
       `Use claude_respond(session='${session.id}', message='...') to send a reply, or claude_output(session='${session.id}') to see full context.`,
     ].join("\n");
 
-    execFile("openclaw", ["system", "event", "--text", eventText, "--mode", "now"], (err, _stdout, stderr) => {
-      if (err) {
-        console.error(`[SessionManager] Failed to trigger waiting-for-input event for session=${session.id}: ${err.message}`);
-        if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
-      } else {
-        console.log(`[SessionManager] waiting-for-input event triggered via system event for session=${session.id}`);
-      }
-    });
+    // Wake the correct orchestrator agent.
+    // The notification router (nr.onWaitingForInput) already handles sending
+    // the user-facing message to the appropriate channel (e.g. Telegram).
+    // We resolve the agentId from: 1) originChannel (3-segment format), or
+    // 2) agentChannels config (workdir → channel mapping).
+    const agentId =
+      (session.originChannel ? extractAgentId(session.originChannel) : undefined) ??
+      resolveAgentId(session.workdir);
+
+    if (agentId) {
+      console.log(`[SessionManager] Triggering waiting-for-input event via agent command for session=${session.id}, agentId=${agentId}`);
+      execFile(
+        "openclaw",
+        ["agent", "--agent", agentId, "--deliver", "-m", eventText],
+        (err, _stdout, stderr) => {
+          if (err) {
+            console.error(
+              `[SessionManager] Failed to trigger waiting-for-input event via agent for session=${session.id}: ${err.message}`,
+            );
+            if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+          } else {
+            console.log(
+              `[SessionManager] waiting-for-input event triggered via agent=${agentId} for session=${session.id}`,
+            );
+          }
+        },
+      );
+    } else {
+      // Fallback: no agentId resolved — use system event (wakes default/main agent)
+      console.log(`[SessionManager] Triggering waiting-for-input event via system event (fallback) for session=${session.id}`);
+      execFile(
+        "openclaw",
+        ["system", "event", "--text", eventText, "--mode", "now"],
+        (err, _stdout, stderr) => {
+          if (err) {
+            console.error(
+              `[SessionManager] Failed to trigger waiting-for-input event for session=${session.id}: ${err.message}`,
+            );
+            if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+          } else {
+            console.log(
+              `[SessionManager] waiting-for-input event triggered via system event for session=${session.id}`,
+            );
+          }
+        },
+      );
+    }
   }
 
   /**
