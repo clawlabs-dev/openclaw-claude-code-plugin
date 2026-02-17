@@ -114,6 +114,9 @@ export class Session {
   // Origin channel -- the channel that launched this session (for background notifications)
   originChannel?: string;
 
+  // Origin agent ID -- the agent that launched this session (for targeted wake events)
+  readonly originAgentId?: string;
+
   // Flags
   budgetExhausted: boolean = false;
   private waitingForInputFired: boolean = false;
@@ -139,6 +142,7 @@ export class Session {
     this.allowedTools = config.allowedTools;
     this.permissionMode = config.permissionMode ?? pluginConfig.permissionMode ?? "bypassPermissions";
     this.originChannel = config.originChannel;
+    this.originAgentId = config.originAgentId;
     this.resumeSessionId = config.resumeSessionId;
     this.forkSession = config.forkSession;
     this.multiTurn = config.multiTurn ?? true;

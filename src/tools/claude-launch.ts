@@ -188,7 +188,11 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
         // Guard: require heartbeat configuration for the agent before spawning.
         // Heartbeat enables automatic "waiting for input" notifications so the
         // agent gets nudged when a Claude Code session needs attention.
+        // Prefer ctx.agentId (authoritative) over resolveAgentId (may return account alias)
         const agentId = ctx.agentId || resolveAgentId(agentWorkspace);
+        if (agentId && !ctx.agentId) {
+          console.warn(`[claude-launch] Using resolveAgentId fallback for agentId="${agentId}" — this may be an account alias, not the real agent ID`);
+        }
         if (agentId) {
           const openclawConfigPath = join(homedir(), ".openclaw", "openclaw.json");
           let heartbeatConfigured = false;
@@ -237,7 +241,7 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
                     `   claude_launch(`,
                     `     prompt="STEP 1: Restart Gateway to activate heartbeat: openclaw gateway restart`,
                     `             STEP 2: Wait 5 seconds`,
-                    `             STEP 3: Wake the agent: openclaw system event --text 'Heartbeat configured, continuing task' --mode now`,
+                    `             STEP 3: Wake the agent: openclaw agent --agent ${agentId} --message 'Heartbeat configured, continuing task'`,
                     `             STEP 4: Continue the original task: [USER_TASK]",`,
                     `     name="setup-heartbeat"`,
                     `   )`,
@@ -248,7 +252,7 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
           }
 
           // Guard: block launch if heartbeat interval is set to 5s (wastes tokens).
-          // System events use --mode now to wake agents instantly, so 5s polling is unnecessary.
+          // Targeted agent messages wake agents instantly, so 5s polling is unnecessary.
           if (heartbeatEvery === "5s") {
             console.log(`[claude-launch] Heartbeat interval too short (5s) for agent "${agentId}" — blocking launch`);
             return {
@@ -259,7 +263,7 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
                   text: [
                     `ERROR: Launch blocked — heartbeat interval too short (5s).`,
                     ``,
-                    `A heartbeat interval of 5s wastes tokens unnecessarily. System events use --mode now to wake you instantly, so the heartbeat interval only affects regular polling.`,
+                    `A heartbeat interval of 5s wastes tokens unnecessarily. Targeted agent messages wake you instantly, so the heartbeat interval only affects regular polling.`,
                     ``,
                     `Fix the heartbeat interval to 60m:`,
                     ``,
@@ -302,7 +306,9 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
                 text: [
                   `ERROR: Launch blocked — no HEARTBEAT.md file found or file is effectively empty.`,
                   ``,
-                  `Claude Code sessions require a HEARTBEAT.md with real content so the agent can check for waiting sessions.`,
+                  `Claude Code sessions require a HEARTBEAT.md with real content as a safety-net fallback.`,
+                  `The plugin wakes you instantly via targeted agent messages when sessions need attention,`,
+                  `but the heartbeat acts as a 60m backup in case a wake message is lost.`,
                   ``,
                   `You must create HEARTBEAT.md FIRST. Here's what to do:`,
                   ``,
@@ -311,7 +317,10 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
                   `cat > ${agentWorkspace}/HEARTBEAT.md << 'EOF'`,
                   `# Heartbeat ${agentId} Agent`,
                   ``,
-                  `## Check Claude Code sessions`,
+                  `## Check Claude Code sessions (safety-net fallback)`,
+                  `Note: The plugin sends targeted wake messages instantly when sessions need attention.`,
+                  `This heartbeat is a 60m backup in case a wake message was lost.`,
+                  ``,
                   `Si des sessions Claude Code sont en attente (waiting for input) :`,
                   `1. \`claude_sessions\` pour lister les sessions actives`,
                   `2. Si session waiting → \`claude_output(session)\` pour voir la question`,
@@ -320,20 +329,20 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
                   `Sinon → HEARTBEAT_OK`,
                   `EOF`,
                   ``,
-                  `2. Verify the heartbeat frequency is set to 5s for fast response:`,
+                  `2. Verify the heartbeat frequency is set to 60m:`,
                   ``,
                   `cat ~/.openclaw/openclaw.json | jq '.agents.list[] | select(.id == "${agentId}") | .heartbeat.every'`,
                   ``,
-                  `If NOT "5s", update it:`,
+                  `If NOT "60m", update it:`,
                   ``,
-                  `jq '.agents.list |= map(if .id == "${agentId}" then .heartbeat.every = "5s" else . end)' ~/.openclaw/openclaw.json > /tmp/openclaw-updated.json && mv /tmp/openclaw-updated.json ~/.openclaw/openclaw.json`,
+                  `jq '.agents.list |= map(if .id == "${agentId}" then .heartbeat.every = "60m" else . end)' ~/.openclaw/openclaw.json > /tmp/openclaw-updated.json && mv /tmp/openclaw-updated.json ~/.openclaw/openclaw.json`,
                   ``,
                   `3. Launch Claude Code to restart Gateway:`,
                   ``,
                   `   claude_launch(`,
                   `     prompt="STEP 1: Restart Gateway: openclaw gateway restart`,
                   `             STEP 2: Wait 5s`,
-                  `             STEP 3: Wake agent: openclaw system event --text 'HEARTBEAT.md configured' --mode now`,
+                  `             STEP 3: Wake agent: openclaw agent --agent ${agentId} --message 'HEARTBEAT.md configured'`,
                   `             STEP 4: Continue task: [USER_TASK]",`,
                   `     name="setup-heartbeat-md"`,
                   `   )`,
@@ -395,6 +404,7 @@ export function makeClaudeLaunchTool(ctx: OpenClawPluginToolContext) {
           multiTurn: !params.multi_turn_disabled,
           permissionMode: params.permission_mode,
           originChannel,
+          originAgentId: agentId,
         });
 
         const promptSummary =

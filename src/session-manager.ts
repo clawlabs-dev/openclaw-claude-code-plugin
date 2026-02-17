@@ -45,10 +45,18 @@ interface PersistedSessionInfo {
   completedAt?: number;
   status: SessionStatus;
   costUsd: number;
+  originAgentId?: string;
+  originChannel?: string;
 }
 
 /** Debounce interval for waiting-for-input events (ms) */
 const WAITING_EVENT_DEBOUNCE_MS = 5_000;
+
+/** Timeout for openclaw CLI wake calls (ms) */
+const WAKE_CLI_TIMEOUT_MS = 30_000;
+
+/** Delay before retrying a failed system event fallback (ms) */
+const WAKE_RETRY_DELAY_MS = 5_000;
 
 export class SessionManager {
   private sessions: Map<string, Session> = new Map();
@@ -190,6 +198,8 @@ export class SessionManager {
       completedAt: session.completedAt,
       status: session.status,
       costUsd: session.costUsd,
+      originAgentId: session.originAgentId,
+      originChannel: session.originChannel,
     };
 
     // Store by internal ID
@@ -260,8 +270,83 @@ export class SessionManager {
   }
 
   /**
+   * Send a wake message to the agent that owns this session.
+   *
+   * Strategy:
+   *  1. If originAgentId is set → targeted `openclaw agent --agent <id> --message`.
+   *     On failure, falls back to broadcast system event.
+   *  2. If originAgentId is not set (e.g. non-agent launches, direct user invocations)
+   *     → broadcast `openclaw system event --mode now` as last resort.
+   */
+  private wakeAgent(session: Session, eventText: string, label: string): void {
+    const agentId = session.originAgentId?.trim();
+
+    if (!agentId) {
+      console.warn(`[SessionManager] No originAgentId for ${label} session=${session.id}, falling back to system event`);
+      this.fireSystemEventWithRetry(eventText, label, session.id);
+      return;
+    }
+
+    // Parse originChannel for delivery routing (e.g. "telegram|default|123456" or "telegram|123456")
+    const deliverArgs: string[] = [];
+    const originChannel = session.originChannel;
+    if (originChannel && originChannel !== "unknown") {
+      const parts = originChannel.split("|");
+      if (parts.length === 3) {
+        // Format: channel|account|target (e.g. "telegram|default|1783869317")
+        deliverArgs.push("--deliver", "--reply-channel", parts[0], "--reply-account", parts[1], "--reply-to", parts[2]);
+      } else if (parts.length === 2) {
+        // Format: channel|target (e.g. "telegram|1783869317")
+        deliverArgs.push("--deliver", "--reply-channel", parts[0], "--reply-to", parts[1]);
+      } else {
+        console.warn(`[SessionManager] originChannel "${originChannel}" has unrecognized format (${parts.length} segments), skipping --deliver for ${label} session=${session.id}`);
+      }
+    }
+
+    console.log(`[SessionManager] Waking agent=${agentId} for ${label} session=${session.id}${deliverArgs.length ? ` with deliver to ${originChannel}` : ""}`);
+    execFile("openclaw", ["agent", "--agent", agentId, "--message", eventText, ...deliverArgs], { timeout: WAKE_CLI_TIMEOUT_MS }, (err, _stdout, stderr) => {
+      if (err) {
+        console.error(`[SessionManager] Failed to wake agent ${agentId} for ${label} session=${session.id}: ${err.message}`);
+        if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+        // Fallback to broadcast system event on targeted wake failure (with retry)
+        console.warn(`[SessionManager] Falling back to system event after targeted wake failure for ${label} session=${session.id}`);
+        this.fireSystemEventWithRetry(eventText, label, session.id);
+      } else {
+        console.log(`[SessionManager] Agent ${agentId} woken successfully for ${label} session=${session.id}`);
+      }
+    });
+  }
+
+  /**
+   * Fire a broadcast system event with a single retry after WAKE_RETRY_DELAY_MS.
+   * Ensures transient CLI/gateway failures don't cause a permanent 60min notification gap.
+   */
+  private fireSystemEventWithRetry(eventText: string, label: string, sessionId: string): void {
+    const args = ["system", "event", "--text", eventText, "--mode", "now"];
+    execFile("openclaw", args, { timeout: WAKE_CLI_TIMEOUT_MS }, (err, _stdout, stderr) => {
+      if (err) {
+        console.error(`[SessionManager] System event failed for ${label} session=${sessionId}: ${err.message}`);
+        if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
+        // Single retry after delay
+        console.warn(`[SessionManager] Scheduling retry in ${WAKE_RETRY_DELAY_MS}ms for ${label} session=${sessionId}`);
+        setTimeout(() => {
+          execFile("openclaw", args, { timeout: WAKE_CLI_TIMEOUT_MS }, (retryErr, _retryStdout, retryStderr) => {
+            if (retryErr) {
+              console.error(`[SessionManager] System event retry also failed for ${label} session=${sessionId}: ${retryErr.message}`);
+              if (retryStderr) console.error(`[SessionManager] retry stderr: ${retryStderr}`);
+            } else {
+              console.log(`[SessionManager] System event retry succeeded for ${label} session=${sessionId}`);
+            }
+          });
+        }, WAKE_RETRY_DELAY_MS);
+      } else {
+        console.log(`[SessionManager] System event sent for ${label} session=${sessionId}`);
+      }
+    });
+  }
+
+  /**
    * Trigger an OpenClaw agent event when a Claude Code session completes.
-   * Uses `openclaw system event` (broadcast) to wake the orchestrator agent.
    */
   private triggerAgentEvent(session: Session): void {
     const status = session.status;
@@ -284,21 +369,17 @@ export class SessionManager {
       `Use claude_output(session='${session.id}', full=true) to get the full result and transmit the analysis to the user.`,
     ].join("\n");
 
-    console.log(`[SessionManager] Triggering agent event for session=${session.id}`);
-    execFile("openclaw", ["system", "event", "--text", eventText, "--mode", "now"], (err) => {
-      if (err) {
-        console.error(`[SessionManager] Failed to trigger agent event for completed session=${session.id}: ${err.message}`);
-      } else {
-        console.log(`[SessionManager] completion event triggered via system event for session=${session.id}`);
-      }
-    });
+    console.log(`[SessionManager] Triggering agent event for completed session=${session.id}`);
+    this.wakeAgent(session, eventText, "completed");
+
+    // Clean up debounce state — session is done, no more waiting events
+    this.lastWaitingEventTimestamps.delete(session.id);
   }
 
 
   /**
    * Trigger an OpenClaw event when a session is waiting for user input.
    * Works for ALL session types (single-turn and multi-turn).
-   * Uses `openclaw system event` (broadcast) to wake the orchestrator agent.
    */
   private triggerWaitingForInputEvent(session: Session): void {
     // Debounce: skip if a waiting-for-input event was sent recently for this session
@@ -330,14 +411,7 @@ export class SessionManager {
     ].join("\n");
 
     console.log(`[SessionManager] Triggering waiting-for-input event for session=${session.id}`);
-    execFile("openclaw", ["system", "event", "--text", eventText, "--mode", "now"], (err, _stdout, stderr) => {
-      if (err) {
-        console.error(`[SessionManager] Failed to trigger waiting-for-input event for session=${session.id}: ${err.message}`);
-        if (stderr) console.error(`[SessionManager] stderr: ${stderr}`);
-      } else {
-        console.log(`[SessionManager] waiting-for-input event triggered via system event for session=${session.id}`);
-      }
-    });
+    this.wakeAgent(session, eventText, "waiting");
   }
 
   /**
@@ -432,6 +506,11 @@ export class SessionManager {
     for (const session of this.sessions.values()) {
       if (session.status === "starting" || session.status === "running") {
         session.kill();
+        this.persistSession(session);
+        if (this.notificationRouter) {
+          this.notificationRouter.onSessionComplete(session, session.originChannel);
+        }
+        this.triggerAgentEvent(session);
       }
     }
   }
@@ -449,6 +528,8 @@ export class SessionManager {
         // Persist before deleting (in case onComplete wasn't called)
         this.persistSession(session);
         this.sessions.delete(id);
+        // Clean up stale debounce timestamp
+        this.lastWaitingEventTimestamps.delete(id);
       }
     }
 

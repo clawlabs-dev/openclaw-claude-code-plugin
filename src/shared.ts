@@ -98,6 +98,11 @@ export function extractAgentId(channelStr: string): string | undefined {
  * Looks up the agentChannels config to find the matching channel string,
  * then extracts the agentId (middle segment) from it.
  * Returns undefined if no match or no agentId can be extracted.
+ *
+ * NOTE: The middle segment of agentChannels is an account alias (e.g. "default"),
+ * not necessarily the OpenClaw agent ID. Prefer ctx.agentId (from the tool context)
+ * when available — it is the authoritative agent ID. This function is a fallback
+ * for cases where ctx.agentId is not set (e.g. non-agent invocations).
  */
 export function resolveAgentId(workdir: string): string | undefined {
   const channel = resolveAgentChannel(workdir);
