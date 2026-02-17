@@ -52,14 +52,33 @@ Agent calls claude_launch → tool validates params → SessionManager.spawn()
   → Pre-launch safety checks (autonomy skill, heartbeat config)
 ```
 
-### Waiting for Input (Wake)
+### Waiting for Input (Wake) — Two-Tier Mechanism
 ```
 Session detects idle (end-of-turn or 15s timer)
   → NotificationRouter.onWaitingForInput()
   → Background: 🔔 notification to origin channel
-  → openclaw system event --mode now (broadcast wake)
+
+Wake tier 1 — Primary (spawn detached):
+  → openclaw agent --agent <id> --message <text> --deliver
+  → Spawns detached process → delivers message directly
+  → Independent of heartbeat configuration
+
+Wake tier 2 — Fallback (system event, requires heartbeat):
+  → openclaw system event --mode now
+  → Triggers immediate heartbeat with reason="wake"
+  → Only used when originAgentId is missing
+  → REQUIRES heartbeat configured on agent (no config = silent no-op)
+
   → Orchestrator agent wakes up, reads output, forwards to user
 ```
+
+#### Heartbeat dependency for fallback wake
+
+The fallback path (`system event --mode now`) depends on the OpenClaw heartbeat pipeline:
+- It triggers an immediate heartbeat with `reason="wake"`
+- The `"wake"` reason is **not exempted** from `isHeartbeatContentEffectivelyEmpty` (unlike `"exec-event"` and `"cron:*"` reasons)
+- **Bug [#14527](https://github.com/openclaw/openclaw/issues/14527)**: If `HEARTBEAT.md` is empty or contains only comments, the wake is silently skipped — CLI returns "ok" but the agent is never woken. This is a known OpenClaw defect where the empty-content guard incorrectly applies to wake events.
+- Pre-launch checks validate that heartbeat is configured, but do not validate that `HEARTBEAT.md` has effective (non-empty, non-comment-only) content.
 
 ### Session Completion
 ```
@@ -72,7 +91,7 @@ Claude Code process exits
 ## Key Design Decisions
 
 1. **CLI for outbound messages** — No runtime API for sending messages; uses `openclaw message send` subprocess
-2. **Broadcast wake events** — Uses `openclaw system event --mode now` instead of targeted routing; agent filters by session ownership
+2. **Two-tier wake** — Primary: detached spawn `openclaw agent --message --deliver` (no heartbeat dependency). Fallback: `openclaw system event --mode now` (requires heartbeat; see bug [#14527](https://github.com/openclaw/openclaw/issues/14527) re: empty HEARTBEAT.md)
 3. **PTY-based sessions** — Full terminal emulation for Claude Code compatibility
 4. **Background notification suppression** — Completion/failure suppressed in background; orchestrator handles user-facing summaries
 5. **maxAutoResponds limit** — Prevents infinite agent loops; resets on user interaction (`userInitiated: true`)
