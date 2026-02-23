@@ -5,12 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.9] - 2025-01-XX
+---
+
+> **ClawLabs Fork** — This is the `clawlabs-dev` maintained fork of
+> [`alizarion/openclaw-claude-code-plugin`](https://github.com/alizarion/openclaw-claude-code-plugin).
+> Fork maintained by Daniel (OpenClaw bot) on behalf of James Kwarteng.
+> See [ClawLabs additions](#clawlabs-fork-additions) below.
+
+---
+
+## [Unreleased]
+
+### ClawLabs Fork Additions (2026-02-23)
+- Added `CHANGELOG.md` with full version history and correct dates
+- Added `AGENTS.md` — contributor workflow, coding standards, release process
+- Added `.github/workflows/release.yml` — auto-release on version bump
+- **Companion plugins shipped alongside this fork:**
+  - [`clawlabs-dev/james-workflow-plugin`](https://github.com/clawlabs-dev/james-workflow-plugin) v1.0.0 — workflow orchestration commands (`/plan`, `/lesson`, `/verify`, `/route`, `/workflow`), self-improvement loop, Boris-style planning
+  - [`clawlabs-dev/openclaw-lifecycle-hooks-plugin`](https://github.com/clawlabs-dev/openclaw-lifecycle-hooks-plugin) v1.1.0 — session lifecycle hooks (before_compaction, agent_end) with capability-sync
+  - [`clawlabs-dev/openclaw-codex-plugin`](https://github.com/clawlabs-dev/openclaw-codex-plugin) v1.2.1 — parallel Codex CLI session management
+- **CLAUDE.md stack** — 573-line global workflow rules baked into `~/.claude/CLAUDE.md` covering Boris-Cherny orchestration patterns, self-improvement loop, plugin guidance, task management
+- **Planned for v1.1.0:** improved session state tracking, better multi-turn lifecycle, lessons.md integration
+
+## [1.0.9] - 2026-02-17
 
 ### Changed
-- Dependency updates for improved compatibility
+- Bumped version to 1.0.9
+- Minor stability improvements
 
-## [1.0.8] - 2025-01-XX
+## [1.0.8] - 2026-02-17
 
 ### Added
 - `skipSafetyChecks` configuration option for development/testing workflows
@@ -22,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored `claude-launch` tool for improved safety check flow
 - Updated safety documentation with skipSafetyChecks usage examples
 
-## [1.0.7] - 2025-01-XX
+## [1.0.7] - 2026-02-17
 
 ### Added
 - Reliable 2-level notification system architecture
@@ -39,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Notification delivery edge cases in multi-session scenarios
 - Improved error messaging for notification failures
 
-## [1.0.6] - 2025-01-XX
+## [1.0.6] - 2026-02-16
 
 ### Added
 - Background notification cleanup for terminated sessions
@@ -55,7 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Background session notification cleanup on termination
 - Event routing edge cases with multiple active sessions
 
-## [1.0.5] - 2025-01-XX
+## [1.0.5] - 2026-02-14
 
 ### Added
 - Session filtering and testing infrastructure
@@ -70,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session list filtering accuracy
 - Session metadata display in `claude-sessions` output
 
-## [1.0.4] - 2024-XX-XX
+## [1.0.4] - 2026-02-14
 
 ### Added
 - `agentChannels` pre-launch safety check
@@ -85,7 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 3-segment channel format support (`channel:account:target`)
 - System event routing to agent channel instead of main channel
 
-## [1.0.3] - 2024-XX-XX
+## [1.0.3] - 2026-02-13
 
 ### Added
 - Tool factory pattern for agent context
@@ -101,7 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved `SKILL.md` documentation
 - Enhanced agent channel documentation (`AGENT_CHANNELS.md`)
 
-## [1.0.2] - 2024-XX-XX
+## [1.0.2] - 2026-02-13
 
 ### Added
 - Comprehensive documentation overhaul
@@ -111,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README documentation structure improvements
 - Safety checks documentation moved before configuration
 
-## [1.0.1] - 2024-XX-XX
+## [1.0.1] - 2026-02-13
 
 ### Added
 - Initial release
@@ -123,6 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable session limits and timeouts
 - Telegram/Discord/multi-platform notification support
 
+[Unreleased]: https://github.com/clawlabs-dev/openclaw-claude-code-plugin/compare/v1.0.9...HEAD
 [1.0.9]: https://github.com/clawlabs-dev/openclaw-claude-code-plugin/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/clawlabs-dev/openclaw-claude-code-plugin/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/clawlabs-dev/openclaw-claude-code-plugin/compare/v1.0.6...v1.0.7

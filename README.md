@@ -1,5 +1,9 @@
 # OpenClaw plugin to orchestrate Claude Code
 
+> **ClawLabs Fork** — maintained at [`clawlabs-dev/openclaw-claude-code-plugin`](https://github.com/clawlabs-dev/openclaw-claude-code-plugin).
+> Upstream: [`alizarion/openclaw-claude-code-plugin`](https://github.com/alizarion/openclaw-claude-code-plugin).
+> See [ClawLabs stack](#clawlabs-stack) for companion plugins and workflow enhancements.
+
 Orchestrate Claude Code sessions as managed background processes from any OpenClaw channel.
 
 Launch, monitor, and interact with multiple Claude Code SDK sessions directly from Telegram, Discord, or any OpenClaw-supported platform — without leaving your chat interface.
@@ -209,6 +213,30 @@ A comprehensive orchestration skill is available at [`skills/claude-code-orchest
 | [docs/AGENT_CHANNELS.md](docs/AGENT_CHANNELS.md) | Multi-agent setup, notification routing, and workspace mapping |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture overview and component breakdown |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Development guide, project structure, and build instructions |
+
+---
+
+## ClawLabs Stack
+
+This fork is part of a broader plugin stack maintained by [ClawLabs](https://github.com/clawlabs-dev):
+
+| Plugin | Purpose | Version |
+|--------|---------|---------|
+| **this repo** — `openclaw-claude-code-plugin` | Claude Code session orchestration | v1.0.9 |
+| [`openclaw-codex-plugin`](https://github.com/clawlabs-dev/openclaw-codex-plugin) | Parallel Codex CLI session management | v1.2.1 |
+| [`openclaw-lifecycle-hooks-plugin`](https://github.com/clawlabs-dev/openclaw-lifecycle-hooks-plugin) | Session lifecycle hooks (before_compaction, agent_end) | v1.1.0 |
+| [`james-workflow-plugin`](https://github.com/clawlabs-dev/james-workflow-plugin) | Claude Code workflow commands: `/plan`, `/lesson`, `/verify`, `/route` | v1.0.0 |
+| [`claude-config`](https://github.com/clawlabs-dev/claude-config) | Global CLAUDE.md + settings (573-line workflow rules, Boris-Cherny patterns) | — |
+
+### What the ClawLabs fork adds
+
+Beyond the upstream plugin, the ClawLabs stack provides:
+
+- **Workflow orchestration** — Boris-Cherny-style planning, verification, and sub-agent strategy baked into every session via `james-workflow-plugin`
+- **Self-improvement loop** — Corrections auto-captured to `tasks/lessons.md` and bubbled to global `hard-won-lessons.md`
+- **Session lifecycle management** — `lifecycle-hooks` fires capability-sync and state-flush hooks on session end and before compaction
+- **Parallel Codex + Claude sessions** — `openclaw-codex-plugin` runs Codex CLI sessions alongside Claude Code for task routing by type
+- **Auto-release pipeline** — All repos have GH Actions that create releases on version bumps; CHANGELOG maintained per Keep-a-Changelog
 
 ---
 
