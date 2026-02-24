@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CI workflow for PRs (build + test)
+
 ### ClawLabs Fork Additions (2026-02-23)
 - Added `CHANGELOG.md` with full version history and correct dates
 - Added `AGENTS.md` — contributor workflow, coding standards, release process
